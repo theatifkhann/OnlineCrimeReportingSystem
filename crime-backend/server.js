@@ -19,11 +19,12 @@ const app = express();
 // Allow the deployed frontend via FRONTEND_URL and local Vite origins in development.
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    const configuredFrontendUrl = process.env.FRONTEND_URL;
+    const configuredFrontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, '');
     const isLocalOrigin = origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    const isConfiguredOrigin = origin && configuredFrontendUrl && origin === configuredFrontendUrl;
+    const isConfiguredOrigin = origin && configuredFrontendUrl && origin.replace(/\/$/, '') === configuredFrontendUrl;
+    const isRenderOrigin = origin && /^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin);
 
-    if (isConfiguredOrigin || isLocalOrigin) {
+    if (isConfiguredOrigin || isLocalOrigin || isRenderOrigin) {
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Vary', 'Origin');
     } else if (!origin) {
