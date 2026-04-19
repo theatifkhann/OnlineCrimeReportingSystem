@@ -31,7 +31,7 @@ services:
     runtime: static
     rootDir: crime-reporting-system/citizen-portal
     buildCommand: npm install && npm run build
-    staticPublishPath: crime-reporting-system/citizen-portal/dist
+    staticPublishPath: dist
     autoDeployTrigger: commit
     routes:
       - type: rewrite
