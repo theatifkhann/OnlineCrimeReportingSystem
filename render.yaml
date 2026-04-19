@@ -29,7 +29,6 @@ services:
   - name: online-crime-reporting-web
     type: web
     runtime: static
-    plan: free
     rootDir: crime-reporting-system/citizen-portal
     buildCommand: npm install && npm run build
     staticPublishPath: crime-reporting-system/citizen-portal/dist
