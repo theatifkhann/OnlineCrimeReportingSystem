@@ -1,0 +1,20 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+*.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build output
+build/
+
+# Vite
+.vite/
+
+# Editor / OS
+.idea/
+.vscode/

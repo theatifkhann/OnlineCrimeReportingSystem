@@ -1,0 +1,43 @@
+# Render Blueprint for the Online Crime Reporting System.
+# During the first Blueprint deploy, Render will prompt for any env var that
+# uses `sync: false`.
+
+services:
+  - name: online-crime-reporting-api
+    type: web
+    runtime: node
+    plan: free
+    rootDir: crime-backend
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URI
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+  - name: online-crime-reporting-web
+    type: web
+    runtime: static
+    plan: free
+    rootDir: crime-reporting-system/citizen-portal
+    buildCommand: npm install && npm run build
+    staticPublishPath: crime-reporting-system/citizen-portal/dist
+    autoDeployTrigger: commit
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false
