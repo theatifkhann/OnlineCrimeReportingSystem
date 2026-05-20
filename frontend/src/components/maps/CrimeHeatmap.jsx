@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 
 const indiaCenter = [22.9734, 78.6569];
@@ -114,6 +114,7 @@ export default function CrimeHeatmap({ reports }) {
     const mapElementRef = useRef(null);
     const mapRef = useRef(null);
     const layerGroupRef = useRef(null);
+    const [mapReady, setMapReady] = useState(false);
 
     const points = useMemo(() => reports.map((report, index) => {
         const point = getReportPoint(report, index);
@@ -130,6 +131,7 @@ export default function CrimeHeatmap({ reports }) {
 
     useEffect(() => {
         let cancelled = false;
+        let resizeTimer;
 
         async function mountMap() {
             const leafletModule = await import('leaflet');
@@ -145,6 +147,9 @@ export default function CrimeHeatmap({ reports }) {
                 maxBoundsViscosity: 0.7,
                 scrollWheelZoom: true,
                 zoomControl: true,
+                zoomAnimation: false,
+                fadeAnimation: false,
+                markerZoomAnimation: false,
             });
 
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -153,16 +158,30 @@ export default function CrimeHeatmap({ reports }) {
 
             map.fitBounds(indiaBounds, { padding: [18, 18] });
             mapRef.current = map;
+            setMapReady(true);
+            resizeTimer = window.setTimeout(() => {
+                if (!cancelled && mapRef.current) {
+                    mapRef.current.invalidateSize();
+                }
+            }, 80);
         }
 
         mountMap();
 
         return () => {
             cancelled = true;
+            if (resizeTimer) {
+                window.clearTimeout(resizeTimer);
+            }
             if (mapRef.current) {
+                mapRef.current.stop();
+                if (layerGroupRef.current) {
+                    layerGroupRef.current.remove();
+                }
                 mapRef.current.remove();
                 mapRef.current = null;
                 layerGroupRef.current = null;
+                setMapReady(false);
             }
         };
     }, []);
@@ -172,7 +191,7 @@ export default function CrimeHeatmap({ reports }) {
 
         async function drawReports() {
             const map = mapRef.current;
-            if (!map) return;
+            if (!map || !mapReady) return;
 
             const leafletModule = await import('leaflet');
             await import('leaflet.heat');
@@ -188,15 +207,15 @@ export default function CrimeHeatmap({ reports }) {
 
             if (points.length) {
                 L.heatLayer(expandHeatPoints(points), {
-                    radius: 24,
-                    blur: 16,
+                    radius: 34,
+                    blur: 22,
                     maxZoom: 9,
-                    minOpacity: 0.28,
+                    minOpacity: 0.42,
                     gradient: {
-                        0.18: '#6d35ff',
-                        0.42: '#d43cff',
-                        0.62: '#ff315d',
-                        0.82: '#ff9f00',
+                        0.12: '#5b2cff',
+                        0.35: '#c13cff',
+                        0.58: '#ff2e63',
+                        0.78: '#ff8a00',
                         1: '#fff200',
                     },
                 }).addTo(layerGroup);
@@ -229,18 +248,39 @@ export default function CrimeHeatmap({ reports }) {
         return () => {
             cancelled = true;
         };
-    }, [points]);
+    }, [mapReady, points]);
 
     return (
-        <div
-            ref={mapElementRef}
-            style={{
-                height: '520px',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                background: '#101820',
-            }}
-        />
+        <div style={{ position: 'relative' }}>
+            <div
+                ref={mapElementRef}
+                style={{
+                    height: '520px',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    background: '#101820',
+                }}
+            />
+            <div
+                className="mono-font"
+                style={{
+                    position: 'absolute',
+                    left: '12px',
+                    bottom: '12px',
+                    zIndex: 500,
+                    background: 'rgba(5, 10, 20, 0.78)',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    borderRadius: '6px',
+                    color: '#fff',
+                    padding: '8px 10px',
+                    fontSize: '11px',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                }}
+            >
+                {points.length ? `${points.length} heat source${points.length === 1 ? '' : 's'}` : 'No mapped cases'}
+            </div>
+        </div>
     );
 }

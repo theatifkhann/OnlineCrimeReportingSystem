@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, Check, X, ShieldCheck, Sun, Moon, Download, Files, AlertTriangle, Clock3, CheckCircle2, MapPin, UserRoundPlus } from 'lucide-react'; // <-- NEW: Imported Sun and Moon
+import { Search, Filter, Check, X, ShieldCheck, Sun, Moon, Download, Files, AlertTriangle, Clock3, CheckCircle2, MapPin, UserRoundPlus, BarChart3, TableProperties } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -38,11 +38,13 @@ const chartColors = {
 
 const emptyCounts = (keys) => keys.reduce((acc, key) => ({ ...acc, [key]: 0 }), {});
 
-export default function Admin() {
+export default function Admin({ setUser }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const didFetchReports = useRef(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedReportId, setSelectedReportId] = useState(null);
   const [assignmentModal, setAssignmentModal] = useState(null);
   const [assignmentForm, setAssignmentForm] = useState({
     name: '',
@@ -51,6 +53,7 @@ export default function Admin() {
     contactNumber: '',
   });
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [activeSection, setActiveSection] = useState('analytics');
   const [heatmapFilters, setHeatmapFilters] = useState({
     category: 'all',
     severity: 'all',
@@ -73,21 +76,40 @@ export default function Admin() {
   // ---------------------------------
 
   useEffect(() => {
+    if (didFetchReports.current) return;
+    didFetchReports.current = true;
     fetchReports();
   }, []);
 
   const fetchReports = async () => {
     try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        toast.error('Admin session missing. Please log in again.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser?.(null);
+        setReports([]);
+        return;
+      }
+
       const res = await fetch(`${API_URL}/reports`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
       if (res.ok) {
         setReports(data);
+      } else if (res.status === 401 || res.status === 403) {
+        toast.error(data.message || 'Admin access required. Please log in with an admin account.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser?.(null);
+        setReports([]);
       } else {
-        toast.error("Failed to load reports");
+        toast.error(data.message || "Failed to load reports");
       }
     } catch (error) {
       console.error("Fetch error:", error);
@@ -117,8 +139,8 @@ export default function Admin() {
 
       if (res.ok) {
         toast.success(`Report marked as ${newStatus}`);
-        setReports(reports.map(report =>
-          report._id === id ? { ...report, status: newStatus, updatedAt: new Date().toISOString() } : report
+        setReports((currentReports) => currentReports.map(report =>
+          report._id === id ? { ...report, ...responseData, status: responseData.status || newStatus, updatedAt: responseData.updatedAt || new Date().toISOString() } : report
         ));
       } else {
         toast.error(responseData.message || `Failed to update`);
@@ -223,6 +245,8 @@ export default function Admin() {
     return true;
   });
 
+  const selectedReport = reports.find((report) => report._id === selectedReportId) || null;
+
   const heatmapReports = reports.filter((report) => {
     if (heatmapFilters.category !== 'all' && report.category !== heatmapFilters.category) return false;
     if (heatmapFilters.severity !== 'all' && report.severity !== heatmapFilters.severity) return false;
@@ -288,7 +312,7 @@ export default function Admin() {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
 
       {/* Header Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 className="display-font" style={{ fontSize: '24px', color: 'var(--text-primary)', margin: '0 0 8px' }}>
             Police Command Center
@@ -298,10 +322,7 @@ export default function Admin() {
           </p>
         </div>
 
-        {/* Toolbar: Search, Filters, & Theme Toggle */}
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-
-          {/* NEW: Theme Toggle Button */}
           <button
             onClick={toggleTheme}
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
@@ -321,87 +342,129 @@ export default function Admin() {
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-
-          <div style={{ position: 'relative' }}>
-            <Search size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input
-              type="text"
-              placeholder="Search ID or Title..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-primary)',
-                padding: '10px 12px 10px 36px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                width: '240px',
-                outline: 'none'
-              }}
-            />
-          </div>
-
-          <div style={{ position: 'relative' }}>
-            <Filter size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-primary)',
-                padding: '10px 32px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                outline: 'none',
-                appearance: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="solved">Solved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
         </div>
       </div>
 
-      {/* Analytics Dashboard */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-        <MetricCard
-          icon={<Files size={18} />}
-          label="Total Cases"
-          value={reports.length}
-          helper={`${filteredReports.length} visible after filters`}
-          color="var(--color-primary)"
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', overflowX: 'auto', paddingBottom: '4px' }}>
+        <SectionTab
+          icon={<BarChart3 size={16} />}
+          label="Analytics Dashboard"
+          active={activeSection === 'analytics'}
+          onClick={() => setActiveSection('analytics')}
         />
-        <MetricCard
-          icon={<Clock3 size={18} />}
-          label="Pending"
-          value={statusCounts.pending || 0}
-          helper={`${pendingRate}% of all cases`}
-          color="var(--color-warning)"
+        <SectionTab
+          icon={<MapPin size={16} />}
+          label="Location Heatmap"
+          active={activeSection === 'heatmap'}
+          onClick={() => setActiveSection('heatmap')}
         />
-        <MetricCard
-          icon={<AlertTriangle size={18} />}
-          label="High Priority"
-          value={urgentCases}
-          helper="High and critical severity"
-          color="var(--color-danger)"
-        />
-        <MetricCard
-          icon={<CheckCircle2 size={18} />}
-          label="Closure Rate"
-          value={`${closureRate}%`}
-          helper={`${statusCounts.solved || 0} solved cases`}
-          color="var(--color-success)"
+        <SectionTab
+          icon={<TableProperties size={16} />}
+          label="Case Management"
+          active={activeSection === 'cases'}
+          onClick={() => setActiveSection('cases')}
         />
       </div>
 
-      <AnalyticsPanel
+      {activeSection === 'analytics' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <MetricCard
+              icon={<Files size={18} />}
+              label="Total Cases"
+              value={reports.length}
+              helper={`${filteredReports.length} visible after filters`}
+              color="var(--color-primary)"
+            />
+            <MetricCard
+              icon={<Clock3 size={18} />}
+              label="Pending"
+              value={statusCounts.pending || 0}
+              helper={`${pendingRate}% of all cases`}
+              color="var(--color-warning)"
+            />
+            <MetricCard
+              icon={<AlertTriangle size={18} />}
+              label="High Priority"
+              value={urgentCases}
+              helper="High and critical severity"
+              color="var(--color-danger)"
+            />
+            <MetricCard
+              icon={<CheckCircle2 size={18} />}
+              label="Closure Rate"
+              value={`${closureRate}%`}
+              helper={`${statusCounts.solved || 0} solved cases`}
+              color="var(--color-success)"
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <AnalyticsPanel title="7-Day Filing Trend" subtitle="New reports received per day">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={sevenDayTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border-subtle)" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-hover)' }} />
+                  <Bar dataKey="reports" radius={[4, 4, 0, 0]} fill={chartColors.solved} />
+                </BarChart>
+              </ResponsiveContainer>
+            </AnalyticsPanel>
+
+            <AnalyticsPanel title="Status Mix" subtitle="Current case distribution">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={3}>
+                    {statusData.map((entry) => (
+                      <Cell key={entry.key} fill={chartColors[entry.key] || chartColors.solved} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<ChartTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+              <LegendList data={statusData} colorFor={(item) => chartColors[item.key] || chartColors.solved} />
+            </AnalyticsPanel>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+            <AnalyticsPanel title="Cases by Category" subtitle="Most reported incident types">
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={categoryData} layout="vertical" margin={{ top: 8, right: 24, left: 22, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border-subtle)" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={96} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-hover)' }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {categoryData.map((entry, index) => (
+                      <Cell key={entry.name} fill={chartColors.category[index % chartColors.category.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </AnalyticsPanel>
+
+            <AnalyticsPanel title="Severity Load" subtitle={`${totalEvidence} evidence file${totalEvidence === 1 ? '' : 's'} attached overall`}>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={severityData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--border-subtle)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-hover)' }} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {severityData.map((entry) => (
+                      <Cell key={entry.key} fill={chartColors[entry.key] || chartColors.medium} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </AnalyticsPanel>
+          </div>
+        </>
+      )}
+
+      {activeSection === 'heatmap' && (
+        <AnalyticsPanel
         title="Crime Location Heatmap"
         subtitle={`${heatmapReports.length} mapped case${heatmapReports.length === 1 ? '' : 's'} shown across India. ${coordinateCoverage}% have precise pins; older records use Indian hotspot demo positions.`}
       >
@@ -449,70 +512,74 @@ export default function Admin() {
         </div>
         <CrimeHeatmap reports={heatmapReports} />
       </AnalyticsPanel>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-        <AnalyticsPanel title="7-Day Filing Trend" subtitle="New reports received per day">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={sevenDayTrend} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke="var(--border-subtle)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-hover)' }} />
-              <Bar dataKey="reports" radius={[4, 4, 0, 0]} fill={chartColors.solved} />
-            </BarChart>
-          </ResponsiveContainer>
-        </AnalyticsPanel>
+      {activeSection === 'cases' && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div>
+              <h2 className="display-font" style={{ fontSize: '18px', color: 'var(--text-primary)', margin: '0 0 4px' }}>Case Management</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: 0 }}>{filteredReports.length} active case{filteredReports.length === 1 ? '' : 's'} match current filters</p>
+            </div>
 
-        <AnalyticsPanel title="Status Mix" subtitle="Current case distribution">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={3}>
-                {statusData.map((entry) => (
-                  <Cell key={entry.key} fill={chartColors[entry.key] || chartColors.solved} />
-                ))}
-              </Pie>
-              <Tooltip content={<ChartTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <LegendList data={statusData} colorFor={(item) => chartColors[item.key] || chartColors.solved} />
-        </AnalyticsPanel>
-      </div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  placeholder="Search ID or Title..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)',
+                    padding: '10px 12px 10px 36px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    width: '240px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-        <AnalyticsPanel title="Cases by Category" subtitle="Most reported incident types">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={categoryData} layout="vertical" margin={{ top: 8, right: 24, left: 22, bottom: 0 }}>
-              <CartesianGrid stroke="var(--border-subtle)" horizontal={false} />
-              <XAxis type="number" allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" width={96} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-hover)' }} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                {categoryData.map((entry, index) => (
-                  <Cell key={entry.name} fill={chartColors.category[index % chartColors.category.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </AnalyticsPanel>
+              <div style={{ position: 'relative' }}>
+                <Filter size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)',
+                    padding: '10px 32px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    outline: 'none',
+                    appearance: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="solved">Solved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            </div>
+          </div>
 
-        <AnalyticsPanel title="Severity Load" subtitle={`${totalEvidence} evidence file${totalEvidence === 1 ? '' : 's'} attached overall`}>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={severityData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke="var(--border-subtle)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis allowDecimals={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--bg-hover)' }} />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {severityData.map((entry) => (
-                  <Cell key={entry.key} fill={chartColors[entry.key] || chartColors.medium} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </AnalyticsPanel>
-      </div>
+          {selectedReport && (
+            <CaseDetailPanel
+              report={selectedReport}
+              onClose={() => setSelectedReportId(null)}
+              onAssign={() => openAssignmentModal(selectedReport)}
+              onReceipt={() => handleReceiptDownload(selectedReport._id || selectedReport.id)}
+              onStatusChange={(status) => handleStatusChange(selectedReport._id || selectedReport.id, status)}
+            />
+          )}
 
-      {/* Data Table */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -549,9 +616,14 @@ export default function Admin() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: index * 0.05 }}
-                    style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                    onClick={() => setSelectedReportId(report._id)}
+                    style={{
+                      borderBottom: '1px solid var(--border-subtle)',
+                      cursor: 'pointer',
+                      backgroundColor: selectedReportId === report._id ? 'var(--bg-hover)' : 'transparent'
+                    }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedReportId === report._id ? 'var(--bg-hover)' : 'transparent'}
                   >
                     <td className="mono-font" style={{ padding: '16px', color: 'var(--text-primary)' }}>
                       {(report._id || report.id || 'XXXXXX').substring(0, 8)}
@@ -572,15 +644,27 @@ export default function Admin() {
                     <td style={{ padding: '16px', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
                       {formatLabel(report.category)}
                       {report.evidence?.length > 0 && (
-                        <div style={{ marginTop: '6px' }}>
-                          <a
-                            href={`${FILE_BASE_URL}${report.evidence[0].url}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ color: 'var(--color-primary)', fontSize: '12px', textDecoration: 'none' }}
-                          >
-                            Evidence ({report.evidence.length})
-                          </a>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                          {report.evidence.map((item, evidenceIndex) => (
+                            <a
+                              key={item.url || `${report._id}-evidence-${evidenceIndex}`}
+                              href={`${FILE_BASE_URL}${item.url}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                color: 'var(--color-primary)',
+                                fontSize: '12px',
+                                textDecoration: 'none',
+                                maxWidth: '140px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                              title={item.originalName}
+                            >
+                              {item.originalName || `Evidence ${evidenceIndex + 1}`}
+                            </a>
+                          ))}
                         </div>
                       )}
                     </td>
@@ -603,41 +687,14 @@ export default function Admin() {
                     </td>
                     <td style={{ padding: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                       <ActionButton
-                        icon={<UserRoundPlus size={14} />}
-                        label={report.assignedOfficer?.name ? 'Edit Assignment' : 'Assign Officer'}
-                        color="var(--color-warning)"
-                        onClick={() => openAssignmentModal(report)}
-                      />
-                      <ActionButton
                         icon={<Download size={14} />}
                         label="Receipt"
                         color="var(--color-primary)"
-                        onClick={() => handleReceiptDownload(report._id || report.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleReceiptDownload(report._id || report.id);
+                        }}
                       />
-                      {report.status !== 'approved' && report.status !== 'solved' && (
-                        <ActionButton
-                          icon={<Check size={14} />}
-                          label="Approve"
-                          color="var(--color-success)"
-                          onClick={() => handleStatusChange(report._id || report.id, 'approved')}
-                        />
-                      )}
-                      {report.status === 'approved' && (
-                        <ActionButton
-                          icon={<ShieldCheck size={14} />}
-                          label="Solve"
-                          color="var(--color-primary)"
-                          onClick={() => handleStatusChange(report._id || report.id, 'solved')}
-                        />
-                      )}
-                      {report.status !== 'rejected' && report.status !== 'solved' && (
-                        <ActionButton
-                          icon={<X size={14} />}
-                          label="Reject"
-                          color="var(--color-danger)"
-                          onClick={() => handleStatusChange(report._id || report.id, 'rejected')}
-                        />
-                      )}
                     </td>
                   </motion.tr>
                 ))
@@ -646,6 +703,8 @@ export default function Admin() {
           </table>
         </div>
       </motion.div>
+        </>
+      )}
       {assignmentModal && (
         <AssignmentModal
           report={assignmentModal}
@@ -661,6 +720,32 @@ export default function Admin() {
 }
 
 // --- Helper Components ---
+
+function SectionTab({ icon, label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: active ? 'rgba(0, 207, 255, 0.12)' : 'var(--bg-card)',
+        border: active ? '1px solid var(--color-primary)' : '1px solid var(--border-subtle)',
+        color: active ? 'var(--color-primary)' : 'var(--text-secondary)',
+        borderRadius: '6px',
+        padding: '10px 12px',
+        fontSize: '13px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
 
 function MetricCard({ icon, label, value, helper, color }) {
   return (
@@ -773,6 +858,177 @@ function HeatmapSelect({ label, value, onChange, options }) {
         ))}
       </select>
     </label>
+  );
+}
+
+function CaseDetailPanel({ report, onClose, onAssign, onReceipt, onStatusChange }) {
+  const caseId = (report._id || report.id || 'XXXXXXXX').substring(0, 8).toUpperCase();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: '10px',
+        padding: '1rem',
+        marginBottom: '1rem'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '1rem' }}>
+        <div>
+          <div className="mono-font" style={{ color: 'var(--color-primary)', fontSize: '12px', marginBottom: '6px' }}>CASE / {caseId}</div>
+          <h3 className="display-font" style={{ color: 'var(--text-primary)', fontSize: '22px', margin: '0 0 6px' }}>{report.title || 'Untitled Report'}</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>
+            {report.location || 'No location'} / Filed {report.createdAt ? new Date(report.createdAt).toLocaleString('en-IN') : 'N/A'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <StatusBadge status={report.status} />
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '6px',
+              color: 'var(--text-secondary)',
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer'
+            }}
+          >
+            x
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(280px, 0.8fr)', gap: '1rem', alignItems: 'start' }}>
+        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '1rem' }}>
+          <h4 className="mono-font" style={{ color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', margin: '0 0 10px' }}>Complaint Details</h4>
+          <p style={{ color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.6, margin: '0 0 1rem' }}>
+            {report.description || 'No description provided.'}
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
+            <DetailItem label="Category" value={formatLabel(report.category)} />
+            <DetailItem label="Severity" value={formatLabel(report.severity || 'medium')} />
+            <DetailItem label="Coordinates" value={typeof report.coordinates?.lat === 'number' ? `${report.coordinates.lat}, ${report.coordinates.lng}` : 'Not pinned'} />
+            <DetailItem label="Evidence" value={`${report.evidence?.length || 0} file${report.evidence?.length === 1 ? '' : 's'}`} />
+          </div>
+        </div>
+
+        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '1rem' }}>
+          <h4 className="mono-font" style={{ color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', margin: '0 0 10px' }}>Assigned Officer</h4>
+          {report.assignedOfficer?.name ? (
+            <div style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{report.assignedOfficer.name}</div>
+              <div>Badge: {report.assignedOfficer.badgeId || 'N/A'}</div>
+              <div>Station: {report.assignedOfficer.policeStation || 'N/A'}</div>
+              <div>Contact: {report.assignedOfficer.contactNumber || 'N/A'}</div>
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>No officer assigned yet.</p>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 0.8fr)', gap: '1rem', marginTop: '1rem' }}>
+        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '1rem' }}>
+          <h4 className="mono-font" style={{ color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', margin: '0 0 10px' }}>Evidence Files</h4>
+          {report.evidence?.length ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {report.evidence.map((item, index) => (
+                <a
+                  key={item.url || `${caseId}-detail-evidence-${index}`}
+                  href={`${FILE_BASE_URL}${item.url}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={item.originalName}
+                  style={{
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: '6px',
+                    color: 'var(--color-primary)',
+                    textDecoration: 'none',
+                    padding: '8px 10px',
+                    fontSize: '12px',
+                    maxWidth: '220px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {item.originalName || `Evidence ${index + 1}`}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>No evidence attached.</p>
+          )}
+        </div>
+
+        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '1rem' }}>
+          <h4 className="mono-font" style={{ color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase', margin: '0 0 10px' }}>Status History</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {(report.statusHistory?.length ? report.statusHistory : [{ status: report.status || 'pending', note: 'Current case state', createdAt: report.updatedAt || report.createdAt }]).map((entry, index) => (
+              <div key={`${entry.status}-${entry.createdAt || index}`} style={{ borderLeft: '2px solid var(--color-primary)', paddingLeft: '10px' }}>
+                <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>{formatLabel(entry.status)}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{entry.note || 'Status updated'} / {entry.createdAt ? new Date(entry.createdAt).toLocaleString('en-IN') : 'N/A'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+        <DetailActionButton icon={<UserRoundPlus size={14} />} label={report.assignedOfficer?.name ? 'Edit Officer' : 'Assign Officer'} color="var(--color-warning)" onClick={onAssign} />
+        <DetailActionButton icon={<Download size={14} />} label="PDF Receipt" color="var(--color-primary)" onClick={onReceipt} />
+        {report.status !== 'approved' && report.status !== 'solved' && (
+          <DetailActionButton icon={<Check size={14} />} label="Approve Case" color="var(--color-success)" onClick={() => onStatusChange('approved')} />
+        )}
+        {report.status === 'approved' && (
+          <DetailActionButton icon={<ShieldCheck size={14} />} label="Mark Solved" color="var(--color-primary)" onClick={() => onStatusChange('solved')} />
+        )}
+        {report.status !== 'rejected' && report.status !== 'solved' && (
+          <DetailActionButton icon={<X size={14} />} label="Reject Case" color="var(--color-danger)" onClick={() => onStatusChange('rejected')} />
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function DetailItem({ label, value }) {
+  return (
+    <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-subtle)', borderRadius: '6px', padding: '10px' }}>
+      <div className="mono-font" style={{ color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>{label}</div>
+      <div style={{ color: 'var(--text-primary)', fontSize: '13px' }}>{value}</div>
+    </div>
+  );
+}
+
+function DetailActionButton({ icon, label, color, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: `${color}18`,
+        border: `1px solid ${color}`,
+        color,
+        borderRadius: '6px',
+        padding: '10px 12px',
+        fontSize: '13px',
+        fontWeight: 600,
+        cursor: 'pointer'
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

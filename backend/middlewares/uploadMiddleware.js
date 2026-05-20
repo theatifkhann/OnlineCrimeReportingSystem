@@ -52,3 +52,26 @@ export const uploadEvidence = multer({
         files: 5,
     },
 });
+
+export const uploadEvidenceFiles = (req, res, next) => {
+    uploadEvidence.array('evidence', 5)(req, res, (error) => {
+        if (!error) {
+            return next();
+        }
+
+        if (error instanceof multer.MulterError) {
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                res.status(400);
+                return next(new Error('Each evidence file must be 50MB or smaller.'));
+            }
+
+            if (error.code === 'LIMIT_FILE_COUNT') {
+                res.status(400);
+                return next(new Error('You can upload a maximum of 5 evidence files.'));
+            }
+        }
+
+        res.status(400);
+        return next(error);
+    });
+};

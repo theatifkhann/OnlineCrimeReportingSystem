@@ -8,6 +8,13 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
+  "nodemonConfig": {
+    "ignore": [
+      "uploads/*",
+      "node_modules/*"
+    ],
+    "ext": "js,mjs,json"
+  },
   "keywords": [],
   "author": "Ayan Ahmad",
   "license": "ISC",

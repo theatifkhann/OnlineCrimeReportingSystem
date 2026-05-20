@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import fs from 'fs/promises';
 import PDFDocument from 'pdfkit';
 import Report from '../models/Report.js';
 import sendEmail from '../utils/sendEmail.js'; // <-- NEW: Import the email utility
@@ -18,6 +19,20 @@ const formatDate = (date) => {
     }).format(new Date(date));
 };
 
+const cleanupUploadedEvidence = async (files = []) => {
+    await Promise.allSettled(
+        files
+            .filter((file) => file.path)
+            .map((file) => fs.unlink(file.path))
+    );
+};
+
+const rejectCreateReport = async (req, res, statusCode, message) => {
+    await cleanupUploadedEvidence(req.files);
+    res.status(statusCode);
+    throw new Error(message);
+};
+
 // @desc    Create a new crime report
 // @route   POST /api/reports
 // @access  Private (User)
@@ -25,18 +40,15 @@ export const createReport = asyncHandler(async (req, res) => {
     const { title, description, location, category = 'other', severity = 'medium', lat, lng } = req.body;
 
     if (!title || !description || !location) {
-        res.status(400);
-        throw new Error('Please fill in all fields');
+        await rejectCreateReport(req, res, 400, 'Please fill in all fields');
     }
 
     if (!allowedCategories.has(category)) {
-        res.status(400);
-        throw new Error('Invalid report category');
+        await rejectCreateReport(req, res, 400, 'Invalid report category');
     }
 
     if (!allowedSeverities.has(severity)) {
-        res.status(400);
-        throw new Error('Invalid report severity');
+        await rejectCreateReport(req, res, 400, 'Invalid report severity');
     }
 
     const latitude = lat !== undefined && lat !== '' ? Number(lat) : undefined;
@@ -50,8 +62,7 @@ export const createReport = asyncHandler(async (req, res) => {
         longitude < -180 ||
         longitude > 180
     )) {
-        res.status(400);
-        throw new Error('Invalid report coordinates');
+        await rejectCreateReport(req, res, 400, 'Invalid report coordinates');
     }
 
     const evidence = (req.files || []).map((file) => ({

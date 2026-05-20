@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
-import { ChevronRight, ChevronLeft, UploadCloud, MapPin, ShieldAlert, CheckCircle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, UploadCloud, MapPin, ShieldAlert, CheckCircle, X } from 'lucide-react';
 import LocationPicker from './components/maps/LocationPicker';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
@@ -25,6 +25,22 @@ const severityOptions = [
   { value: 'high', label: 'High' },
   { value: 'critical', label: 'Critical' },
 ];
+
+const MAX_EVIDENCE_FILES = 5;
+const MAX_EVIDENCE_SIZE = 50 * 1024 * 1024;
+const allowedEvidenceTypes = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+  'video/mp4',
+  'video/quicktime',
+]);
+
+const formatFileSize = (size) => {
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.ceil(size / 1024)} KB`;
+};
 
 const downloadReceipt = async (reportId) => {
   const token = localStorage.getItem("token");
@@ -70,6 +86,49 @@ function ReportForm() {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleEvidenceFiles = (selectedFiles) => {
+    const incomingFiles = Array.from(selectedFiles || []);
+    const nextFiles = [...files];
+
+    for (const selectedFile of incomingFiles) {
+      if (nextFiles.length >= MAX_EVIDENCE_FILES) {
+        toast.error(`You can upload a maximum of ${MAX_EVIDENCE_FILES} evidence files.`);
+        break;
+      }
+
+      if (!allowedEvidenceTypes.has(selectedFile.type)) {
+        toast.error(`${selectedFile.name} is not supported. Upload JPG, PNG, WEBP, PDF, MP4, or MOV.`);
+        continue;
+      }
+
+      if (selectedFile.size > MAX_EVIDENCE_SIZE) {
+        toast.error(`${selectedFile.name} is larger than 50MB.`);
+        continue;
+      }
+
+      const alreadySelected = nextFiles.some((file) =>
+        file.name === selectedFile.name &&
+        file.size === selectedFile.size &&
+        file.lastModified === selectedFile.lastModified
+      );
+
+      if (!alreadySelected) {
+        nextFiles.push(selectedFile);
+      }
+    }
+
+    setFiles(nextFiles);
+  };
+
+  const removeEvidenceFile = (indexToRemove) => {
+    setFiles((currentFiles) => currentFiles.filter((_, index) => index !== indexToRemove));
+  };
+
+  const handleEvidenceDrop = (event) => {
+    event.preventDefault();
+    handleEvidenceFiles(event.dataTransfer.files);
   };
 
   const handleSubmit = async (e) => {
@@ -248,26 +307,55 @@ function ReportForm() {
 
                 <div className="input-group">
                   <label className="input-label">Attach Evidence</label>
-                  <label className="dropzone">
+                  <label
+                    className="dropzone"
+                    onDrop={handleEvidenceDrop}
+                    onDragOver={(event) => event.preventDefault()}
+                  >
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,application/pdf,video/mp4,video/quicktime"
                       multiple
                       style={{ display: 'none' }}
-                      onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                      onChange={(e) => {
+                        handleEvidenceFiles(e.target.files);
+                        e.target.value = '';
+                      }}
                     />
                     <UploadCloud size={32} color="var(--color-primary)" style={{ marginBottom: '10px' }} />
                     <div style={{ fontSize: '14px', marginBottom: '4px', color: 'var(--text-primary)' }}>
                       {files.length ? `${files.length} file${files.length > 1 ? 's' : ''} selected` : "Click to upload or drag files here"}
                     </div>
                     {/* FIXED: Was white with 0.4 opacity, now uses secondary text variable */}
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>JPG, PNG, WEBP, PDF, MP4, MOV up to 50MB each</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>JPG, PNG, WEBP, PDF, MP4, MOV. Max 5 files, 50MB each.</div>
                   </label>
                   {files.length > 0 && (
                     <div className="file-list">
-                      {files.map((selectedFile) => (
-                        <div key={`${selectedFile.name}-${selectedFile.size}`} className="file-pill">
-                          {selectedFile.name}
+                      {files.map((selectedFile, index) => (
+                        <div key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} className="file-pill">
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeEvidenceFile(index)}
+                            aria-label={`Remove ${selectedFile.name}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '18px',
+                              height: '18px',
+                              border: '1px solid var(--border-subtle)',
+                              borderRadius: '4px',
+                              background: 'transparent',
+                              color: 'var(--text-secondary)',
+                              cursor: 'pointer',
+                              flex: '0 0 auto',
+                            }}
+                          >
+                            <X size={12} />
+                          </button>
                         </div>
                       ))}
                     </div>

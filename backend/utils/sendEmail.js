@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
 
 const sendEmail = async (options) => {
+    if (process.env.EMAIL_ENABLED === 'false') {
+        console.warn(`Email skipped because EMAIL_ENABLED=false. To: ${options.email}, Subject: ${options.subject}`);
+        return;
+    }
+
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
         throw new Error('Email service is not configured. Set EMAIL_USER and EMAIL_PASS.');
     }
@@ -29,6 +34,10 @@ const sendEmail = async (options) => {
         const info = await transporter.sendMail(mailOptions);
         console.log("Email sent: " + info.response);
     } catch (error) {
+        if (error.code === 'EAUTH' || error.responseCode === 535) {
+            throw new Error('Email authentication failed. Use a valid Gmail App Password in EMAIL_PASS.');
+        }
+
         console.error("Nodemailer Error: ", error);
         throw new Error(error.message || "Could not send email.");
     }

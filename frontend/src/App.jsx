@@ -15,11 +15,21 @@ function App() {
   // Load user from localStorage on initial render
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+
+    if (!storedUser || !token) {
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      return;
+    }
+
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
       } catch (error) {
         console.error("Failed to parse user data");
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
       }
     }
   }, []);
@@ -69,7 +79,7 @@ function App() {
 
           {/* Admin Protected Route */}
           {isAdmin ? (
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/admin" element={<AdminPanel setUser={setUser} />} />
           ) : (
             <Route path="/admin" element={<Navigate to="/" replace />} />
           )}
