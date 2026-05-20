@@ -5,6 +5,30 @@ import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+const parseApiResponse = async (res) => {
+  const text = await res.text();
+
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch (error) {
+    return { message: text || `Server returned ${res.status}` };
+  }
+};
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 25000) => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
+
 export default function Auth({ setUser }) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -140,12 +164,12 @@ export default function Auth({ setUser }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/forgot-password`, {
+      const res = await fetchWithTimeout(`${API_URL}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: resetData.email })
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
 
       if (res.ok) {
         toast.success("Password reset code sent to your email.");
@@ -154,7 +178,9 @@ export default function Auth({ setUser }) {
         toast.error(data.message || "Failed to send reset code.");
       }
     } catch (error) {
-      toast.error("Network error while requesting reset.");
+      toast.error(error.name === 'AbortError'
+        ? "Password reset request timed out. Please try again."
+        : "Network error while requesting reset. Check backend URL and CORS settings.");
     } finally {
       setLoading(false);
     }
@@ -165,7 +191,7 @@ export default function Auth({ setUser }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
+      const res = await fetchWithTimeout(`${API_URL}/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -174,7 +200,7 @@ export default function Auth({ setUser }) {
           newPassword: resetData.newPassword
         })
       });
-      const data = await res.json();
+      const data = await parseApiResponse(res);
 
       if (res.ok) {
         toast.success("Password reset successfully. You can now log in.");
@@ -185,7 +211,9 @@ export default function Auth({ setUser }) {
         toast.error(data.message || "Failed to reset password.");
       }
     } catch (error) {
-      toast.error("Network error while resetting password.");
+      toast.error(error.name === 'AbortError'
+        ? "Password reset request timed out. Please try again."
+        : "Network error while resetting password. Check backend URL and CORS settings.");
     } finally {
       setLoading(false);
     }
