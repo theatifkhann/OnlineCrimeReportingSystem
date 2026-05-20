@@ -15,12 +15,11 @@
 ## Setup Instructions
 
 ### Backend
-cd crime-backend
+cd backend
 npm install
-nodemon run dev
+npm run dev
 
 ### Frontend
-cd crime-frontend
-cd citizon-portal
+cd frontend
 npm install
 npm run dev

@@ -7,7 +7,7 @@ services:
     type: web
     runtime: node
     plan: free
-    rootDir: crime-backend
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     autoDeployTrigger: commit
@@ -29,7 +29,7 @@ services:
   - name: online-crime-reporting-web
     type: web
     runtime: static
-    rootDir: crime-reporting-system/citizen-portal
+    rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     autoDeployTrigger: commit
