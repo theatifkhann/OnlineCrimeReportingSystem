@@ -1,7 +1,9 @@
 import nodemailer from 'nodemailer';
 
 const sendEmail = async (options) => {
-    if (process.env.EMAIL_ENABLED === 'false') {
+    const emailEnabled = String(process.env.EMAIL_ENABLED ?? 'true').trim().toLowerCase();
+
+    if (emailEnabled === 'false') {
         console.warn(`Email skipped because EMAIL_ENABLED=false. To: ${options.email}, Subject: ${options.subject}`);
         return;
     }
